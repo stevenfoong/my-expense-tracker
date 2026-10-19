@@ -39,16 +39,26 @@ export async function openEditor(id, onChange = () => {}) {
         <h2>Receipt</h2>
         <button type="button" class="icon-btn" data-act="close" aria-label="Close">✕</button>
       </div>
-      ${r.error ? `<p class="banner ${r.status === 'failed' ? 'bad' : 'warn'}">${esc(r.error)}</p>` : ''}
+      ${r.error ? `<p class="banner ${r.status === 'failed' ? 'bad' : 'warn'}">${esc(r.status === 'pending' ? `${settings.default_currency} amount pending: ${r.foreign_currency} ${money(r.foreign_amount)} recorded. Fill in the ${settings.default_currency} amount once you know it.` : r.error)}</p>` : ''}
       <div class="editor-grid">
         <div class="preview">${preview}</div>
         <div class="fields">
           <label>Date<input type="date" name="txn_date" value="${esc(r.txn_date)}"></label>
           <label>Merchant<input name="merchant" value="${esc(r.merchant)}" autocomplete="off"></label>
-          <div class="row2">
-            <label>Total<input name="total" inputmode="decimal" value="${r.total ?? ''}"></label>
-            <label>Currency<input name="currency" value="${esc(r.currency || settings.default_currency)}" maxlength="6"></label>
-          </div>
+          <label>Amount (${esc(settings.default_currency)})
+            <input name="total" inputmode="decimal" value="${r.total ?? ''}" placeholder="${r.foreign_amount != null ? 'Fill in after conversion' : ''}">
+          </label>
+          <details class="foreign" ${r.foreign_currency ? 'open' : ''}>
+            <summary>Foreign currency${r.foreign_currency ? `: ${esc(r.foreign_currency)} ${money(r.foreign_amount)}` : ''}</summary>
+            <div class="row2">
+              <label>Currency<input name="foreign_currency" value="${esc(r.foreign_currency)}" maxlength="6" placeholder="e.g. THB" autocapitalize="characters"></label>
+              <label>Amount<input name="foreign_amount" inputmode="decimal" value="${r.foreign_amount ?? ''}"></label>
+            </div>
+            <div class="rate-row">
+              <label>Rate to ${esc(settings.default_currency)}<input name="rate" inputmode="decimal" placeholder="e.g. 0.13"></label>
+              <button type="button" class="btn ghost" data-act="convert">Fill ${esc(settings.default_currency)} amount</button>
+            </div>
+          </details>
           <label>Category
             <select name="category">
               <option value="">— Choose —</option>
@@ -77,15 +87,23 @@ export async function openEditor(id, onChange = () => {}) {
 
   const form = d.querySelector('form');
   const busy = (on) => form.querySelectorAll('button').forEach((b) => (b.disabled = on));
+
+  form.querySelector('[data-act="convert"]').onclick = () => {
+    const amount = parseFloat(form.foreign_amount.value);
+    const rate = parseFloat(form.rate.value);
+    if (!(amount > 0) || !(rate > 0)) { toast('Enter the foreign amount and a rate first', 'warn'); return; }
+    form.total.value = (Math.round(amount * rate * 100) / 100).toFixed(2);
+    form.total.focus();
+  };
   form.querySelector('[data-act="close"]').onclick = () => d.close();
 
   form.onsubmit = async (e) => {
     e.preventDefault();
     busy(true);
     try {
-      const saved = await api('/receipts/' + id, { method: 'PUT', body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+      const saved = await api('/receipts/' + id, { method: 'PUT', body: JSON.stringify(formData(form)) });
       onChange(saved);
-      toast(saved.status === 'ok' ? 'Saved' : 'Saved, still needs: ' + saved.error, saved.status === 'ok' ? 'ok' : 'warn');
+      toast(saved.status === 'ok' ? 'Saved' : saved.status === 'pending' ? 'Saved, RM amount still pending' : 'Saved, still needs: ' + saved.error, saved.status === 'ok' ? 'ok' : 'warn');
       d.close();
     } catch (err) { toast(err.message, 'bad'); busy(false); }
   };
@@ -111,4 +129,10 @@ export async function openEditor(id, onChange = () => {}) {
       d.close();
     } catch (err) { toast(err.message, 'bad'); busy(false); }
   };
+}
+
+function formData(form) {
+  const data = Object.fromEntries(new FormData(form));
+  delete data.rate; // helper only, not stored
+  return data;
 }

@@ -1,7 +1,7 @@
 import { api, esc, money, fmtDate, toast, getSettings } from '../lib.js';
 import { openEditor } from '../components/editor.js';
 
-let el, monthInput, rows = [];
+let el, monthInput, rows = [], homeCurrency = 'RM';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -44,7 +44,8 @@ async function mount(root) {
     </div>`;
 
   monthInput = el.querySelector('#month');
-  const s = await getSettings().catch(() => ({ cycle_end_day: 25 }));
+  const s = await getSettings().catch(() => ({ cycle_end_day: 25, default_currency: 'RM' }));
+  homeCurrency = s.default_currency || 'RM';
   monthInput.value = cycleMonthFor(new Date(), s.cycle_end_day);
 
   monthInput.addEventListener('change', load);
@@ -72,23 +73,27 @@ async function load() {
   }
 }
 
-function sumByCurrency(list) {
-  const t = {};
-  for (const r of list) if (r.total !== null) t[r.currency || '?'] = (t[r.currency || '?'] || 0) + r.total;
-  return t;
-}
-
 function renderSummary() {
-  const totals = sumByCurrency(rows);
-  const pending = rows.filter((r) => r.status !== 'ok').length;
-  el.querySelector('#totals').innerHTML = `
-    ${Object.entries(totals).map(([c, v]) => `<div class="total"><span class="big-num">${money(v, c)}</span></div>`).join('') || '<div class="total"><span class="big-num">—</span></div>'}
-    <div class="total-meta muted">${rows.length} receipt${rows.length === 1 ? '' : 's'}${pending ? ` · <span class="warn-text">${pending} need review</span>` : ''}</div>`;
+  const main = homeCurrency;
+  const priced = rows.filter((r) => r.total !== null);
+  const total = priced.reduce((s, r) => s + r.total, 0);
+  const review = rows.filter((r) => r.status === 'review' || r.status === 'failed').length;
 
-  // Category breakdown in the main (most-used) currency
-  const main = Object.entries(totals).sort((a, b) => b[1] - a[1])[0]?.[0];
+  // Foreign amounts still waiting for their RM figure, grouped by currency
+  const pend = {};
+  for (const r of rows) if (r.total === null && r.foreign_amount !== null) {
+    pend[r.foreign_currency] = (pend[r.foreign_currency] || 0) + r.foreign_amount;
+  }
+  const pendCount = rows.filter((r) => r.total === null && r.foreign_amount !== null).length;
+
+  el.querySelector('#totals').innerHTML = `
+    <div class="total"><span class="big-num">${priced.length ? money(total, main) : '—'}</span></div>
+    <div class="total-meta muted">${rows.length} receipt${rows.length === 1 ? '' : 's'}${review ? ` · <span class="warn-text">${review} need review</span>` : ''}</div>
+    ${pendCount ? `<div class="total-meta warn-text">${pendCount} pending conversion (${Object.entries(pend).map(([c, v]) => money(v, c)).join(', ')}), not in total</div>` : ''}`;
+
+  // Category breakdown (home currency amounts only)
   const byCat = {};
-  for (const r of rows) if (r.currency === main && r.total !== null) byCat[r.category || 'Uncategorised'] = (byCat[r.category || 'Uncategorised'] || 0) + r.total;
+  for (const r of priced) byCat[r.category || 'Uncategorised'] = (byCat[r.category || 'Uncategorised'] || 0) + r.total;
   const entries = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
   const max = entries[0]?.[1] || 1;
 
@@ -124,8 +129,9 @@ function renderList() {
         <span class="row-sub">${esc([fmtDate(r.txn_date), r.category, r.area].filter(Boolean).join(' · '))}</span>
       </div>
       <div class="row-end">
-        <span class="amount">${money(r.total, r.currency)}</span>
-        ${r.status !== 'ok' ? `<span class="pill ${r.status === 'failed' ? 'bad' : 'warn'}">Review</span>` : ''}
+        <span class="amount">${r.total !== null ? money(r.total, homeCurrency) : money(r.foreign_amount, r.foreign_currency)}</span>
+        ${r.total !== null && r.foreign_amount !== null ? `<span class="row-sub">${money(r.foreign_amount, r.foreign_currency)}</span>` : ''}
+        ${r.status === 'pending' ? `<span class="pill warn">${homeCurrency} pending</span>` : r.status !== 'ok' ? `<span class="pill ${r.status === 'failed' ? 'bad' : 'warn'}">Review</span>` : ''}
       </div>`;
     li.onclick = () => openEditor(r.id, () => load());
     list.append(li);

@@ -1,10 +1,4 @@
-import { json, fail, getSettings, cyclePeriod, cycleMonthOf, shiftMonth, todayLocal } from '../_lib/util.js';
-
-const ALIASES = { MYR: 'RM', 'RM.': 'RM', SGD: 'S$', 'S$': 'S$' };
-const canon = (c) => {
-  const u = String(c || '').trim().toUpperCase();
-  return ALIASES[u] || u;
-};
+import { json, fail, getSettings, cyclePeriod, cycleMonthOf, shiftMonth, todayLocal, canonCurrency as canon } from '../_lib/util.js';
 
 // GET /api/trends?range=year|12m
 // Monthly totals by statement cycle, in the default currency.
@@ -24,26 +18,32 @@ export async function onRequestGet({ request, env }) {
   const end = cyclePeriod(current, endDay).end;
 
   const { results } = await env.DB.prepare(
-    `SELECT txn_date, total, currency, category FROM receipts
-     WHERE txn_date BETWEEN ? AND ? AND total IS NOT NULL`
+    `SELECT txn_date, total, currency, category, foreign_currency, foreign_amount FROM receipts
+     WHERE txn_date BETWEEN ? AND ? AND (total IS NOT NULL OR foreign_amount IS NOT NULL)`
   ).bind(start, end).all();
 
   const main = canon(settings.default_currency);
   const months = Object.fromEntries(monthKeys.map((k) => [k, { month: k, ...cyclePeriod(k, endDay), total: 0, count: 0 }]));
-  const others = {};
+  const pending = {};
   const cats = {};
 
   for (const r of results) {
     const key = cycleMonthOf(r.txn_date, endDay);
     if (!months[key]) continue;
+    if (r.total === null) {
+      // Foreign amount recorded, RM amount not filled in yet
+      const c = r.foreign_currency || '?';
+      pending[c] = pending[c] || { currency: c, total: 0, count: 0 };
+      pending[c].total += r.foreign_amount;
+      pending[c].count += 1;
+      continue;
+    }
     const cur = canon(r.currency) || main;
     if (cur === main) {
       months[key].total += r.total;
       months[key].count += 1;
       const c = r.category || 'Uncategorised';
       cats[c] = (cats[c] || 0) + r.total;
-    } else {
-      others[cur] = (others[cur] || 0) + r.total;
     }
   }
 
@@ -59,7 +59,7 @@ export async function onRequestGet({ request, env }) {
     total: Math.round(total * 100) / 100,
     average: Math.round((total / list.length) * 100) / 100,
     highest: highest && highest.total > 0 ? { month: highest.month, total: highest.total } : null,
-    other_currencies: Object.entries(others).map(([currency, t]) => ({ currency, total: Math.round(t * 100) / 100 })),
+    pending_conversion: Object.values(pending).map((p) => ({ ...p, total: Math.round(p.total * 100) / 100 })),
     categories: Object.entries(cats)
       .map(([category, t]) => ({ category, total: Math.round(t * 100) / 100 }))
       .sort((a, b) => b.total - a.total),

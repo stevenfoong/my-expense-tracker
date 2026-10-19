@@ -26,10 +26,12 @@ export async function processReceipt(env, settings, id) {
     env.DB.prepare(
       `UPDATE receipts SET txn_date = ?, merchant = ?, total = ?, currency = ?, category = ?,
          area = ?, payment_method = ?, status = ?, error = ?, raw_ai = ?,
+         foreign_currency = ?, foreign_amount = ?,
          notes = COALESCE(?, notes), updated_at = datetime('now')
        WHERE id = ?`
     ).bind(f.txn_date, f.merchant, f.total, f.currency, f.category, f.area, f.payment_method,
-      result.status, result.error, JSON.stringify(result.raw), f.notes, id),
+      result.status, result.error, JSON.stringify(result.raw),
+      f.foreign_currency, f.foreign_amount, f.notes, id),
     env.DB.prepare('DELETE FROM receipt_items WHERE receipt_id = ?').bind(id),
     ...result.items.map((i) =>
       env.DB.prepare(

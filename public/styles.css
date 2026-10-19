@@ -189,3 +189,10 @@ dialog.editor::backdrop { background: rgb(0 0 0 / .45); }
 .table-view table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 6px; }
 .table-view th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 0; }
 .table-view td { padding: 5px 0; border-top: 1px solid var(--border); }
+
+/* Foreign currency block in the editor */
+.foreign { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+.foreign summary { cursor: pointer; font-size: .85rem; font-weight: 600; color: var(--muted); }
+.foreign[open] { display: grid; gap: 10px; }
+.foreign[open] summary { margin-bottom: 2px; }
+.rate-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }

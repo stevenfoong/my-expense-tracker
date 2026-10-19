@@ -88,6 +88,7 @@ async function runQueue() {
       item.li.remove();
       queue.splice(queue.indexOf(item), 1);
       if (row.status === 'ok') toast(`Saved: ${row.merchant || 'receipt'} ${money(row.total, row.currency)}`, 'ok');
+      else if (row.status === 'pending') toast(`Saved: ${row.merchant || 'receipt'} ${money(row.foreign_amount, row.foreign_currency)} (RM amount pending)`, 'ok');
       else toast(row.status === 'failed' ? 'AI could not read a receipt' : 'Saved, needs review', row.status === 'failed' ? 'bad' : 'warn');
     } catch (e) {
       item.state = 'error';
@@ -128,6 +129,7 @@ const STATUS_PILL = {
   review: ['warn', 'Review'],
   failed: ['bad', 'AI failed'],
   processing: ['bad', 'Stuck'],
+  pending: ['warn', 'RM pending'],
 };
 
 function receiptRow(r, { showDate = true } = {}) {
@@ -136,7 +138,7 @@ function receiptRow(r, { showDate = true } = {}) {
   const [cls, label] = STATUS_PILL[r.status] || ['busy', r.status];
   const sub = r.status === 'processing'
     ? 'Reading was interrupted. Open and press Re-run AI.'
-    : r.status === 'ok'
+    : r.status === 'ok' || r.status === 'pending'
       ? [showDate ? fmtDate(r.txn_date) : null, r.category].filter(Boolean).join(' · ')
       : r.error || '';
   li.innerHTML = `
@@ -145,7 +147,8 @@ function receiptRow(r, { showDate = true } = {}) {
       <span class="row-sub">${esc(sub)}</span>
     </div>
     <div class="row-end">
-      ${r.total !== null ? `<span class="amount">${money(r.total, r.currency)}</span>` : ''}
+      ${r.total !== null ? `<span class="amount">${money(r.total, r.currency)}</span>`
+        : r.foreign_amount !== null ? `<span class="amount">${money(r.foreign_amount, r.foreign_currency)}</span>` : ''}
       <span class="pill ${cls}">${label}</span>
     </div>`;
   li.onclick = () => openEditor(r.id, () => refreshLists());
@@ -154,7 +157,7 @@ function receiptRow(r, { showDate = true } = {}) {
 
 async function loadAttention() {
   try {
-    const { receipts } = await api('/receipts?status=review,failed,stuck');
+    const { receipts } = await api('/receipts?status=review,failed,stuck,pending');
     el.querySelector('[data-sec="attention"]').hidden = receipts.length === 0;
     attentionEl.replaceChildren(...receipts.map((r) => receiptRow(r)));
   } catch (e) {

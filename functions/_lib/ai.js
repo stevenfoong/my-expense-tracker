@@ -1,4 +1,5 @@
-import { toBase64, normaliseDate, toNumber, parsePrintedDate, sanityCheckYear } from './util.js';
+import { toBase64, normaliseDate, toNumber, parsePrintedDate, sanityCheckYear, canonCurrency } from './util.js';
+import { evaluate } from './status.js';
 
 function buildPrompt(settings) {
   return `You are reading a purchase receipt. Extract the details and return ONLY a JSON object:
@@ -125,19 +126,25 @@ export async function extractReceipt(env, settings, buffer, mimeType, fileName, 
 
 function validate(raw, settings, uploadedOn) {
   const str = (v) => (typeof v === 'string' ? v.trim() : '') || null;
-  const problems = [];
 
   // Parse the printed date ourselves (day-first), then check the year against the upload date.
   const parsed = parsePrintedDate(raw.dateAsPrinted) || parsePrintedDate(raw.date) || normaliseDate(raw.date);
   const { date: txnDate, note: dateNote } = sanityCheckYear(parsed, uploadedOn);
   const dateCorrected = dateNote && dateNote.startsWith('Year read as');
 
+  // Amounts in another currency are kept as the foreign amount; the RM amount is filled in later.
+  const amount = toNumber(raw.totalAmount);
+  const printedCurrency = str(raw.currency);
+  const isForeign = printedCurrency && canonCurrency(printedCurrency) !== canonCurrency(settings.default_currency);
+
   const fields = {
     merchant: str(raw.merchantName),
     txn_date: txnDate,
     notes: dateCorrected ? dateNote : null,
-    total: toNumber(raw.totalAmount),
-    currency: str(raw.currency) || settings.default_currency,
+    total: isForeign ? null : amount,
+    currency: settings.default_currency,
+    foreign_currency: isForeign ? printedCurrency.toUpperCase() : null,
+    foreign_amount: isForeign ? amount : null,
     category: str(raw.category),
     area: str(raw.area),
     payment_method: str(raw.paymentMethod),
@@ -145,11 +152,11 @@ function validate(raw, settings, uploadedOn) {
 
   if (fields.category && !settings.categories.includes(fields.category)) fields.category = null;
 
-  if (!fields.merchant) problems.push('merchant missing');
-  if (!fields.txn_date) problems.push('date missing or unreadable');
-  else if (dateNote && !dateCorrected) problems.push(dateNote);
-  if (fields.total === null) problems.push('total missing');
-  if (!fields.category) problems.push('category not set');
+  let { status, error } = evaluate(fields);
+  if (fields.txn_date && dateNote && !dateCorrected) {
+    status = 'review';
+    error = [dateNote, error].filter(Boolean).join(', ');
+  }
 
   const items = Array.isArray(raw.lineItems)
     ? raw.lineItems
@@ -164,8 +171,8 @@ function validate(raw, settings, uploadedOn) {
   return {
     fields,
     items,
-    status: problems.length ? 'review' : 'ok',
-    error: problems.length ? problems.join(', ') : null,
+    status,
+    error,
     raw,
   };
 }

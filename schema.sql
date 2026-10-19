@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS receipts (
   file_key TEXT NOT NULL,
   file_type TEXT NOT NULL,
   file_name TEXT,
-  raw_ai TEXT
+  raw_ai TEXT,
+  foreign_currency TEXT,
+  foreign_amount REAL
 );
 
 CREATE INDEX IF NOT EXISTS idx_receipts_date ON receipts (txn_date);

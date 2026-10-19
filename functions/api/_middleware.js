@@ -1,3 +1,5 @@
+import { ensureSchema } from '../_lib/migrate.js';
+
 // Extra lock on the API: verifies the Cloudflare Access JWT when
 // ACCESS_TEAM_DOMAIN and ACCESS_AUD are set. Without them, it relies on
 // Access in front of the site (still required).
@@ -40,6 +42,7 @@ export async function onRequest(context) {
     if (!ok) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'content-type': 'application/json' } });
   }
   try {
+    await ensureSchema(env.DB);
     return await next();
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 500, headers: { 'content-type': 'application/json' } });

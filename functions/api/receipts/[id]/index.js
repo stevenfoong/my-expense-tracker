@@ -1,6 +1,7 @@
 import { json, fail, normaliseDate, toNumber } from '../../../_lib/util.js';
+import { evaluate } from '../../../_lib/status.js';
 
-const EDITABLE = ['txn_date', 'merchant', 'total', 'currency', 'category', 'area', 'payment_method', 'notes'];
+const EDITABLE = ['txn_date', 'merchant', 'total', 'category', 'area', 'payment_method', 'notes', 'foreign_currency', 'foreign_amount'];
 
 // GET /api/receipts/:id -> receipt with line items
 export async function onRequestGet({ params, env }) {
@@ -12,7 +13,7 @@ export async function onRequestGet({ params, env }) {
   return json({ ...row, items });
 }
 
-// PUT /api/receipts/:id -> manual edit. Saving marks the receipt as ok if the key fields are present.
+// PUT /api/receipts/:id -> manual edit. Status is recalculated from the fields.
 export async function onRequestPut({ params, request, env }) {
   const body = await request.json();
   const row = await env.DB.prepare('SELECT * FROM receipts WHERE id = ?').bind(params.id).first();
@@ -24,23 +25,24 @@ export async function onRequestPut({ params, request, env }) {
     next.txn_date = normaliseDate(body.txn_date);
     if (!next.txn_date) return fail('Invalid date');
   }
-  if ('total' in body && body.total !== '' && body.total !== null) {
-    next.total = toNumber(String(body.total));
-    if (next.total === null) return fail('Invalid total');
+  for (const k of ['total', 'foreign_amount']) {
+    if (k in body && body[k] !== '' && body[k] !== null) {
+      next[k] = toNumber(String(body[k]));
+      if (next[k] === null) return fail(`Invalid ${k === 'total' ? 'RM amount' : 'foreign amount'}`);
+    }
   }
+  next.foreign_currency = next.foreign_currency ? String(next.foreign_currency).trim().toUpperCase() : null;
+  if (!next.foreign_currency) next.foreign_amount = null;
 
-  const missing = [];
-  if (!next.merchant) missing.push('merchant missing');
-  if (!next.txn_date) missing.push('date missing');
-  if (next.total === null || next.total === undefined) missing.push('total missing');
-  if (!next.category) missing.push('category not set');
+  const { status, error } = evaluate(next);
 
   await env.DB.prepare(
-    `UPDATE receipts SET txn_date = ?, merchant = ?, total = ?, currency = ?, category = ?, area = ?,
-       payment_method = ?, notes = ?, status = ?, error = ?, updated_at = datetime('now') WHERE id = ?`
-  ).bind(next.txn_date, next.merchant, next.total, next.currency, next.category, next.area,
-    next.payment_method, next.notes, missing.length ? 'review' : 'ok',
-    missing.length ? missing.join(', ') : null, params.id).run();
+    `UPDATE receipts SET txn_date = ?, merchant = ?, total = ?, category = ?, area = ?,
+       payment_method = ?, notes = ?, foreign_currency = ?, foreign_amount = ?,
+       status = ?, error = ?, updated_at = datetime('now') WHERE id = ?`
+  ).bind(next.txn_date, next.merchant, next.total, next.category, next.area,
+    next.payment_method, next.notes, next.foreign_currency, next.foreign_amount,
+    status, error, params.id).run();
 
   const saved = await env.DB.prepare('SELECT * FROM receipts WHERE id = ?').bind(params.id).first();
   delete saved.raw_ai;

@@ -144,3 +144,9 @@ export function shiftMonth(month, n) {
   const t = y * 12 + (m - 1) + n;
   return `${Math.floor(t / 12)}-${pad((t % 12) + 1)}`;
 }
+
+/** Normalise a currency label so "RM", "MYR", "rm" compare equal. */
+export function canonCurrency(c) {
+  const u = String(c || '').trim().toUpperCase().replace(/\.$/, '');
+  return { MYR: 'RM', RINGGIT: 'RM' }[u] || u;
+}

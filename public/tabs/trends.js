@@ -104,8 +104,10 @@ function render(d) {
   );
 
   const notes = ['Months follow your statement cycle. Tap a bar to open that month.'];
-  if (d.other_currencies.length) {
-    notes.push('Not included (other currencies): ' + d.other_currencies.map((o) => money(o.total, o.currency)).join(', ') + '.');
+  if (d.pending_conversion.length) {
+    const n = d.pending_conversion.reduce((s, p) => s + p.count, 0);
+    notes.push(`Not included yet: ${n} receipt${n === 1 ? '' : 's'} waiting for the ${cur} amount (` +
+      d.pending_conversion.map((p) => money(p.total, p.currency)).join(', ') + ').');
   }
   el.querySelector('#chart-note').textContent = notes.join(' ');
 
