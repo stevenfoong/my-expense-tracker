@@ -1,0 +1,22 @@
+name = "expense-tracker"
+compatibility_date = "2026-10-01"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "expense-tracker"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "expense-receipts"
+
+[ai]
+binding = "AI"
+
+# Secrets (set in the Pages dashboard, NOT here):
+#   CF_ACCESS_CLIENT_ID      service token ID for your Gemma tunnel
+#   CF_ACCESS_CLIENT_SECRET  service token secret for your Gemma tunnel
+# Optional extra lock (recommended):
+#   ACCESS_TEAM_DOMAIN       e.g. yourteam.cloudflareaccess.com
+#   ACCESS_AUD               Application Audience (AUD) tag of this app's Access application
