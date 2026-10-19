@@ -1,7 +1,9 @@
-import { api, esc, money, toast, compressImage } from '../lib.js';
+import { api, esc, money, fmtDate, toast, compressImage } from '../lib.js';
 import { openEditor } from '../components/editor.js';
 
-let el, queueEl, attentionEl;
+const RECENT_COUNT = 10;
+
+let el, queueEl, attentionEl, recentEl;
 const queue = [];
 let running = false;
 
@@ -23,16 +25,21 @@ function mount(root) {
       </div>
     </div>
     <div class="card" data-sec="queue" hidden>
-      <h3>This session</h3>
+      <h3>Uploading</h3>
       <ul class="list" id="queue"></ul>
     </div>
     <div class="card" data-sec="attention" hidden>
       <h3>Needs attention</h3>
       <ul class="list" id="attention"></ul>
+    </div>
+    <div class="card" data-sec="recent" hidden>
+      <h3>Recent uploads</h3>
+      <ul class="list" id="recent"></ul>
     </div>`;
 
   queueEl = el.querySelector('#queue');
   attentionEl = el.querySelector('#attention');
+  recentEl = el.querySelector('#recent');
 
   el.querySelectorAll('input[type=file]').forEach((input) =>
     input.addEventListener('change', () => {
@@ -42,16 +49,23 @@ function mount(root) {
   );
 }
 
-function show() { loadAttention(); }
+function show() { refreshLists(); }
+
+function refreshLists() {
+  loadAttention();
+  loadRecent();
+}
+
+/* ---------- Upload queue (only shows files still in progress or failed to upload) ---------- */
 
 function addFiles(files) {
   for (const file of files) {
-    const item = { file, state: 'waiting', row: null, li: document.createElement('li') };
+    const item = { file, state: 'waiting', li: document.createElement('li') };
     queue.push(item);
-    queueEl.prepend(item.li);
-    render(item);
+    queueEl.append(item.li);
+    renderQueueItem(item);
   }
-  el.querySelector('[data-sec="queue"]').hidden = false;
+  updateQueueVisibility();
   runQueue();
 }
 
@@ -62,76 +76,97 @@ async function runQueue() {
   let item;
   while ((item = queue.find((q) => q.state === 'waiting'))) {
     item.state = 'uploading';
-    render(item);
+    renderQueueItem(item);
     try {
       const file = await compressImage(item.file);
       const fd = new FormData();
       fd.append('file', file, file.name);
       item.state = 'reading';
-      render(item);
-      item.row = await api('/receipts', { method: 'POST', body: fd });
-      item.state = item.row.status;
+      renderQueueItem(item);
+      const row = await api('/receipts', { method: 'POST', body: fd });
+      // Done: drop it from the queue; it now appears under Recent uploads.
+      item.li.remove();
+      queue.splice(queue.indexOf(item), 1);
+      if (row.status === 'ok') toast(`Saved: ${row.merchant || 'receipt'} ${money(row.total, row.currency)}`, 'ok');
+      else toast(row.status === 'failed' ? 'AI could not read a receipt' : 'Saved, needs review', row.status === 'failed' ? 'bad' : 'warn');
     } catch (e) {
       item.state = 'error';
       item.message = e.message;
+      renderQueueItem(item);
     }
-    render(item);
+    updateQueueVisibility();
+    refreshLists();
   }
   running = false;
-  loadAttention();
 }
 
-const LABEL = {
-  waiting: 'Waiting', uploading: 'Uploading…', reading: 'AI reading…',
-  ok: 'Saved', review: 'Needs review', failed: 'AI failed', error: 'Upload failed',
-};
+function updateQueueVisibility() {
+  el.querySelector('[data-sec="queue"]').hidden = queue.length === 0;
+}
 
-function render(item) {
-  const r = item.row;
-  const title = r?.merchant || item.file.name;
-  const sub = r ? [r.txn_date, r.category].filter(Boolean).join(' · ') : '';
-  const note = r?.error || item.message || '';
+const QUEUE_LABEL = { waiting: 'Waiting', uploading: 'Uploading…', reading: 'AI reading…', error: 'Upload failed' };
+
+function renderQueueItem(item) {
   item.li.className = 'row';
   item.li.innerHTML = `
     <div class="row-main">
-      <span class="row-title">${esc(title)}</span>
-      <span class="row-sub">${esc(sub || note)}</span>
-      ${sub && note ? `<span class="row-sub warn-text">${esc(note)}</span>` : ''}
+      <span class="row-title">${esc(item.file.name)}</span>
+      <span class="row-sub">${esc(item.message || '')}</span>
     </div>
     <div class="row-end">
-      ${r && r.total !== null ? `<span class="amount">${money(r.total, r.currency)}</span>` : ''}
-      <span class="pill ${pillClass(item.state)}">${LABEL[item.state]}</span>
+      <span class="pill ${item.state === 'error' ? 'bad' : 'busy'}">${QUEUE_LABEL[item.state]}</span>
+      ${item.state === 'error' ? '<button type="button" class="btn ghost small" data-act="retry">Retry</button>' : ''}
     </div>`;
-  item.li.onclick = r ? () => openEditor(r.id, (changed) => {
-    if (changed.deleted) { item.li.remove(); return; }
-    item.row = changed; item.state = changed.status; render(item); loadAttention();
-  }) : null;
-  item.li.classList.toggle('clickable', Boolean(r));
+  const retry = item.li.querySelector('[data-act="retry"]');
+  if (retry) retry.onclick = () => { item.state = 'waiting'; item.message = ''; renderQueueItem(item); runQueue(); };
 }
 
-const pillClass = (s) => ({ ok: 'ok', review: 'warn', failed: 'bad', error: 'bad' }[s] || 'busy');
+/* ---------- Server-backed lists ---------- */
+
+const STATUS_PILL = {
+  ok: ['ok', 'Saved'],
+  review: ['warn', 'Review'],
+  failed: ['bad', 'AI failed'],
+  processing: ['bad', 'Stuck'],
+};
+
+function receiptRow(r, { showDate = true } = {}) {
+  const li = document.createElement('li');
+  li.className = 'row clickable';
+  const [cls, label] = STATUS_PILL[r.status] || ['busy', r.status];
+  const sub = r.status === 'processing'
+    ? 'Reading was interrupted. Open and press Re-run AI.'
+    : r.status === 'ok'
+      ? [showDate ? fmtDate(r.txn_date) : null, r.category].filter(Boolean).join(' · ')
+      : r.error || '';
+  li.innerHTML = `
+    <div class="row-main">
+      <span class="row-title">${esc(r.merchant || r.file_name || 'Unreadable receipt')}</span>
+      <span class="row-sub">${esc(sub)}</span>
+    </div>
+    <div class="row-end">
+      ${r.total !== null ? `<span class="amount">${money(r.total, r.currency)}</span>` : ''}
+      <span class="pill ${cls}">${label}</span>
+    </div>`;
+  li.onclick = () => openEditor(r.id, () => refreshLists());
+  return li;
+}
 
 async function loadAttention() {
   try {
     const { receipts } = await api('/receipts?status=review,failed,stuck');
-    const sec = el.querySelector('[data-sec="attention"]');
-    sec.hidden = receipts.length === 0;
-    attentionEl.innerHTML = '';
-    for (const r of receipts) {
-      const li = document.createElement('li');
-      li.className = 'row clickable';
-      li.innerHTML = `
-        <div class="row-main">
-          <span class="row-title">${esc(r.merchant || r.file_name || 'Unreadable receipt')}</span>
-          <span class="row-sub">${esc(r.status === 'processing' ? 'Reading was interrupted. Open and press Re-run AI.' : r.error || '')}</span>
-        </div>
-        <div class="row-end">
-          ${r.total !== null ? `<span class="amount">${money(r.total, r.currency)}</span>` : ''}
-          <span class="pill ${r.status === 'review' ? 'warn' : 'bad'}">${{ failed: 'AI failed', processing: 'Stuck' }[r.status] || 'Review'}</span>
-        </div>`;
-      li.onclick = () => openEditor(r.id, () => loadAttention());
-      attentionEl.append(li);
-    }
+    el.querySelector('[data-sec="attention"]').hidden = receipts.length === 0;
+    attentionEl.replaceChildren(...receipts.map((r) => receiptRow(r)));
+  } catch (e) {
+    toast(e.message, 'bad');
+  }
+}
+
+async function loadRecent() {
+  try {
+    const { receipts } = await api('/receipts?recent=' + RECENT_COUNT);
+    el.querySelector('[data-sec="recent"]').hidden = receipts.length === 0;
+    recentEl.replaceChildren(...receipts.map((r) => receiptRow(r)));
   } catch (e) {
     toast(e.message, 'bad');
   }

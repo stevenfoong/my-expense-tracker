@@ -11,9 +11,15 @@ export async function onRequestGet({ request, env }) {
   const settings = await getSettings(env.DB);
   const month = url.searchParams.get('month');
   const status = url.searchParams.get('status');
+  const recent = url.searchParams.get('recent');
 
   let rows, period = null;
-  if (month) {
+  if (recent) {
+    const n = Math.min(Math.max(parseInt(recent, 10) || 10, 1), 50);
+    ({ results: rows } = await env.DB.prepare(
+      `SELECT * FROM receipts ORDER BY created_at DESC, rowid DESC LIMIT ?`
+    ).bind(n).all());
+  } else if (month) {
     if (!/^\d{4}-\d{2}$/.test(month)) return fail('month must be YYYY-MM');
     period = cyclePeriod(month, settings.cycle_end_day);
     ({ results: rows } = await env.DB.prepare(
@@ -32,7 +38,7 @@ export async function onRequestGet({ request, env }) {
       `SELECT * FROM receipts WHERE ${where} ORDER BY created_at DESC`
     ).bind(...list).all());
   } else {
-    return fail('Pass month=YYYY-MM or status=...');
+    return fail('Pass month=YYYY-MM, status=... or recent=N');
   }
 
   for (const r of rows) delete r.raw_ai;

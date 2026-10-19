@@ -148,3 +148,4 @@ dialog.editor::backdrop { background: rgb(0 0 0 / .45); }
 .toast[data-kind="bad"] { background: var(--bad); color: #fff; }
 .toast[data-kind="warn"] { background: var(--warn); color: #fff; }
 @media (min-width: 641px) { .toast { bottom: 24px; } }
+.btn.small { padding: 4px 10px; font-size: .8rem; }
