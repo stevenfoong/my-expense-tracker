@@ -5,12 +5,14 @@
 import upload from './tabs/upload.js';
 import spending from './tabs/spending.js';
 import trends from './tabs/trends.js';
+import statements from './tabs/statements.js';
 import settings from './tabs/settings.js';
 
 const TABS = [
   { id: 'upload',   label: 'Upload',   module: upload },
   { id: 'spending', label: 'Spending', module: spending },
   { id: 'trends',   label: 'Trends',   module: trends },
+  { id: 'statements', label: 'Statements', module: statements },
   { id: 'settings', label: 'Settings', module: settings },
 ];
 

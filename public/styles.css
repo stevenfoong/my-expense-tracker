@@ -200,3 +200,32 @@ dialog.editor::backdrop { background: rgb(0 0 0 / .45); }
 .editor-grid.no-file { grid-template-columns: 1fr; }
 .editor-grid.no-file .preview { min-height: 0; padding: 8px 12px; place-items: start; }
 .editor-grid.no-file .preview p { margin: 0; }
+
+/* Statements */
+.btn.disabled { opacity: .55; pointer-events: none; }
+.banner.ok { background: var(--ok-soft); color: var(--ok); }
+.detail-head { display: flex; align-items: center; gap: 10px; }
+.detail-head .icon-btn { display: grid; place-items: center; text-decoration: none; }
+.detail-title { flex: 1; display: grid; min-width: 0; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.checks li { display: flex; gap: 10px; align-items: flex-start; }
+.check-icon { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: .8rem; font-weight: 700; }
+.check-icon.ok { background: var(--ok-soft); color: var(--ok); }
+.check-icon.bad { background: var(--bad-soft); color: var(--bad); }
+.check-icon.muted { background: var(--surface-2); color: var(--muted); }
+.check-body { display: grid; gap: 2px; }
+.check-label { font-weight: 600; }
+.hint { font-size: .85rem; color: var(--warn); }
+.stmt-lines .row { gap: 10px; }
+.line-date { flex: none; width: 48px; font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stmt-lines .row.credit .row-title, .stmt-lines .row.credit .amount { color: var(--muted); }
+.stmt-lines .row.suspect { background: var(--warn-soft); border-radius: 8px; padding-left: 6px; padding-right: 6px; }
+.raw summary { cursor: pointer; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.raw pre { white-space: pre-wrap; word-break: break-word; font-size: .72rem; max-height: 50vh; overflow: auto;
+  background: var(--surface-2); padding: 10px; border-radius: 8px; }
+dialog.editor.narrow { width: min(480px, calc(100vw - 24px)); }
+label.check { display: flex; align-items: center; gap: 8px; font-weight: 400; color: var(--text); }
+label.check input { width: auto; }
+@media (max-width: 640px) {
+  .tabs button { font-size: .8rem; padding: 11px 0; }
+}

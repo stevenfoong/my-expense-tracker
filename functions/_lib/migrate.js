@@ -5,8 +5,45 @@ import { evaluate } from './status.js';
 // safe to run repeatedly and concurrently.
 let done = false;
 
+const STATEMENT_TABLES = [
+  `CREATE TABLE IF NOT EXISTS statements (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    statement_date TEXT,
+    file_key TEXT NOT NULL,
+    file_name TEXT,
+    raw_text TEXT,
+    summary TEXT,
+    cards TEXT,
+    warnings TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    accepted INTEGER NOT NULL DEFAULT 0
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_statements_date ON statements (statement_date)`,
+  `CREATE TABLE IF NOT EXISTS statement_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    statement_id TEXT NOT NULL REFERENCES statements(id) ON DELETE CASCADE,
+    card TEXT NOT NULL,
+    line_no REAL NOT NULL,
+    txn_date TEXT,
+    description TEXT,
+    merchant TEXT,
+    location TEXT,
+    country TEXT,
+    amount REAL NOT NULL,
+    is_credit INTEGER NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL,
+    foreign_currency TEXT,
+    foreign_amount REAL,
+    manual INTEGER NOT NULL DEFAULT 0
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_statement_lines_stmt ON statement_lines (statement_id)`,
+];
+
 export async function ensureSchema(db) {
   if (done) return;
+  await db.batch(STATEMENT_TABLES.map((sql) => db.prepare(sql)));
   const { results } = await db.prepare('PRAGMA table_info(receipts)').all();
   const cols = new Set(results.map((c) => c.name));
 
