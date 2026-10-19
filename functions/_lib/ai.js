@@ -1,10 +1,10 @@
-import { toBase64, normaliseDate, toNumber } from './util.js';
+import { toBase64, normaliseDate, toNumber, parsePrintedDate, sanityCheckYear } from './util.js';
 
 function buildPrompt(settings) {
   return `You are reading a purchase receipt. Extract the details and return ONLY a JSON object:
 {
   "merchantName": "store or vendor name",
-  "date": "transaction date as YYYY-MM-DD",
+  "dateAsPrinted": "the transaction date copied exactly as printed, character for character, e.g. 03/09/2026 or 03 SEP 26",
   "totalAmount": 0.00,
   "currency": "currency code or symbol as printed, e.g. RM, SGD, THB. Empty if not shown",
   "category": "one of the allowed categories, or empty if none fits",
@@ -15,7 +15,7 @@ function buildPrompt(settings) {
 
 Rules:
 - totalAmount is the final amount paid (after tax, service charge, rounding and discounts), as a number.
-- Receipts are usually from Malaysia; dates are normally printed day-first (DD/MM/YYYY).
+- Copy the date exactly as printed. Do not reorder, reformat or guess the day, month or year.
 - quantity is a number; use 1 when not shown. lineTotal is the amount charged for that line.
 - Allowed categories: ${JSON.stringify(settings.categories)}. Use an exact value from this list or "".
 - Do not guess values that are not on the receipt; use "" instead.`;
@@ -102,7 +102,7 @@ async function pdfToText(env, buffer, name) {
 }
 
 /** Runs extraction for one stored file. Returns { fields, items, status, error, raw }. */
-export async function extractReceipt(env, settings, buffer, mimeType, fileName) {
+export async function extractReceipt(env, settings, buffer, mimeType, fileName, uploadedOn) {
   const prompt = buildPrompt(settings);
   let message;
 
@@ -120,16 +120,22 @@ export async function extractReceipt(env, settings, buffer, mimeType, fileName) 
   }
 
   const raw = await callOllama(env, settings, message);
-  return validate(raw, settings);
+  return validate(raw, settings, uploadedOn);
 }
 
-function validate(raw, settings) {
+function validate(raw, settings, uploadedOn) {
   const str = (v) => (typeof v === 'string' ? v.trim() : '') || null;
   const problems = [];
 
+  // Parse the printed date ourselves (day-first), then check the year against the upload date.
+  const parsed = parsePrintedDate(raw.dateAsPrinted) || parsePrintedDate(raw.date) || normaliseDate(raw.date);
+  const { date: txnDate, note: dateNote } = sanityCheckYear(parsed, uploadedOn);
+  const dateCorrected = dateNote && dateNote.startsWith('Year read as');
+
   const fields = {
     merchant: str(raw.merchantName),
-    txn_date: normaliseDate(raw.date),
+    txn_date: txnDate,
+    notes: dateCorrected ? dateNote : null,
     total: toNumber(raw.totalAmount),
     currency: str(raw.currency) || settings.default_currency,
     category: str(raw.category),
@@ -141,6 +147,7 @@ function validate(raw, settings) {
 
   if (!fields.merchant) problems.push('merchant missing');
   if (!fields.txn_date) problems.push('date missing or unreadable');
+  else if (dateNote && !dateCorrected) problems.push(dateNote);
   if (fields.total === null) problems.push('total missing');
   if (!fields.category) problems.push('category not set');
 

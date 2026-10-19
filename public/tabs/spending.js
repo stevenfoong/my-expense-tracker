@@ -54,7 +54,10 @@ async function mount(root) {
   el.querySelector('#filter').addEventListener('change', renderList);
 }
 
-function show() { if (monthInput?.value) load(); }
+function show(month) {
+  if (month && /^\d{4}-\d{2}$/.test(month) && monthInput) monthInput.value = month;
+  if (monthInput?.value) load();
+}
 
 async function load() {
   if (!monthInput.value) return;

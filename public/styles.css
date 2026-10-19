@@ -149,3 +149,43 @@ dialog.editor::backdrop { background: rgb(0 0 0 / .45); }
 .toast[data-kind="warn"] { background: var(--warn); color: #fff; }
 @media (min-width: 641px) { .toast { bottom: 24px; } }
 .btn.small { padding: 4px 10px; font-size: .8rem; }
+
+/* Trends */
+.segmented { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }
+.segmented button { flex: 1; border: 0; background: none; color: var(--muted); font: inherit; font-weight: 600;
+  padding: 8px; border-radius: 8px; cursor: pointer; }
+.segmented button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat { display: grid; gap: 2px; align-content: start; }
+.stat-label { font-size: .75rem; color: var(--muted); font-weight: 600; }
+.stat-value { font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.stat-sub { font-size: .75rem; color: var(--muted); }
+@media (max-width: 420px) { .stat-value { font-size: .88rem; } .stats { gap: 6px; } }
+.stat-value { white-space: nowrap; }
+
+.chart-plot { position: relative; height: 220px; margin: 6px 0 34px 34px; }
+.chart-grid { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.grid-line { border-top: 1px solid var(--border); height: 0; position: relative; }
+.grid-line span { position: absolute; right: calc(100% + 6px); top: -.6em; font-size: .7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.avg-line { position: absolute; left: 0; right: 0; border-top: 1.5px dashed var(--muted); pointer-events: none; z-index: 1; }
+.avg-line span { position: absolute; right: 0; top: -1.25em; font-size: .68rem; color: var(--muted); background: var(--surface); padding: 0 3px; }
+.bars { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: 2px; }
+.bar-col { position: relative; display: flex; align-items: flex-end; justify-content: center; border: 0; background: none;
+  padding: 0; cursor: pointer; height: 100%; }
+.bar-col:hover, .bar-col:focus-visible { background: color-mix(in srgb, var(--text) 5%, transparent); border-radius: 6px; outline: none; }
+.bar { width: min(70%, 28px); background: var(--accent); border-radius: 4px 4px 0 0; min-height: 0; }
+.bar.current { background: repeating-linear-gradient(135deg, var(--accent) 0 5px, color-mix(in srgb, var(--accent) 55%, var(--surface)) 5px 8px); }
+.tip { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); display: none; z-index: 3;
+  background: var(--text); color: var(--bg); padding: 7px 10px; border-radius: 8px; font-size: .78rem; white-space: nowrap;
+  text-align: left; gap: 1px; box-shadow: 0 4px 14px rgb(0 0 0 / .2); }
+.tip .muted { color: color-mix(in srgb, var(--bg) 70%, var(--text)); }
+.bar-col:hover .tip, .bar-col:focus-visible .tip { display: grid; }
+.bar-col:nth-child(-n+3) .tip { left: 0; transform: none; }
+.bar-col:nth-last-child(-n+3) .tip { left: auto; right: 0; transform: none; }
+.x-labels { position: absolute; left: 0; right: 0; top: calc(100% + 6px); display: grid; grid-template-columns: repeat(var(--cols), 1fr);
+  gap: 2px; text-align: center; font-size: .7rem; color: var(--muted); line-height: 1.15; }
+.x-labels small { font-size: .65rem; }
+.table-view summary { cursor: pointer; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.table-view table { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 6px; }
+.table-view th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 0; }
+.table-view td { padding: 5px 0; border-top: 1px solid var(--border); }
