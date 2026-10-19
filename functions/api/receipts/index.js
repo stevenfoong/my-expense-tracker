@@ -1,5 +1,6 @@
 import { json, fail, getSettings, cyclePeriod, newId } from '../../_lib/util.js';
 import { processReceipt } from '../../_lib/process.js';
+import { applyEdit } from '../../_lib/edit.js';
 
 const ALLOWED = /^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/;
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -45,8 +46,25 @@ export async function onRequestGet({ request, env }) {
   return json({ period, receipts: rows });
 }
 
-// POST /api/receipts  (multipart, field "file") -> stores file, runs AI, returns saved row
+// POST /api/receipts
+//   multipart, field "file"  -> stores the file, runs AI, returns the saved row
+//   JSON body                 -> manual entry without a receipt image
 export async function onRequestPost({ request, env }) {
+  if ((request.headers.get('content-type') || '').includes('application/json')) {
+    const settings = await getSettings(env.DB);
+    const id = newId();
+    await env.DB.prepare(
+      `INSERT INTO receipts (id, status, file_key, file_type, currency) VALUES (?, 'review', '', 'manual', ?)`
+    ).bind(id, settings.default_currency).run();
+    const row = await env.DB.prepare('SELECT * FROM receipts WHERE id = ?').bind(id).first();
+    const result = await applyEdit(env, row, await request.json());
+    if (result.error) {
+      await env.DB.prepare('DELETE FROM receipts WHERE id = ?').bind(id).run();
+      return fail(result.error);
+    }
+    return json(result.row, 201);
+  }
+
   const form = await request.formData();
   const file = form.get('file');
   if (!file || typeof file === 'string') return fail('No file uploaded');

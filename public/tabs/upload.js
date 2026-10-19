@@ -23,6 +23,7 @@ function mount(root) {
           Choose files
         </label>
       </div>
+      <button type="button" class="btn ghost" data-act="manual">Enter manually (no receipt)</button>
     </div>
     <div class="card" data-sec="queue" hidden>
       <h3>Uploading</h3>
@@ -40,6 +41,9 @@ function mount(root) {
   queueEl = el.querySelector('#queue');
   attentionEl = el.querySelector('#attention');
   recentEl = el.querySelector('#recent');
+
+  el.querySelector('[data-act="manual"]').onclick = () =>
+    openEditor(null, () => refreshLists());
 
   el.querySelectorAll('input[type=file]').forEach((input) =>
     input.addEventListener('change', () => {

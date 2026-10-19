@@ -196,3 +196,7 @@ dialog.editor::backdrop { background: rgb(0 0 0 / .45); }
 .foreign[open] { display: grid; gap: 10px; }
 .foreign[open] summary { margin-bottom: 2px; }
 .rate-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+
+.editor-grid.no-file { grid-template-columns: 1fr; }
+.editor-grid.no-file .preview { min-height: 0; padding: 8px 12px; place-items: start; }
+.editor-grid.no-file .preview p { margin: 0; }

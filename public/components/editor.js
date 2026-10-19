@@ -12,15 +12,25 @@ function ensureDialog() {
   return dialog;
 }
 
-/** Opens the editor. onChange(row) after save/re-run, onChange({ deleted: id }) after delete. */
+const localToday = () => {
+  const t = new Date();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+};
+
+/** Opens the editor for a receipt, or a blank form for a manual entry when id is null.
+ *  onChange(row) after save/re-run, onChange({ deleted: id }) after delete. */
 export async function openEditor(id, onChange = () => {}) {
   const d = ensureDialog();
   d.innerHTML = '<div class="editor-body"><p class="muted">Loading…</p></div>';
   if (!d.open) d.showModal();
 
+  const isNew = !id;
   let r, settings;
   try {
-    [r, settings] = await Promise.all([api('/receipts/' + id), getSettings()]);
+    [r, settings] = await Promise.all([
+      isNew ? { txn_date: localToday(), file_key: '', total: null, foreign_amount: null } : api('/receipts/' + id),
+      getSettings(),
+    ]);
   } catch (e) {
     d.innerHTML = `<div class="editor-body"><p class="error">${esc(e.message)}</p><button class="btn" value="close">Close</button></div>`;
     d.querySelector('button').onclick = () => d.close();
@@ -29,18 +39,21 @@ export async function openEditor(id, onChange = () => {}) {
 
   const cats = settings.categories.includes(r.category) || !r.category ? settings.categories : [r.category, ...settings.categories];
   const fileUrl = `/api/receipts/${id}/file`;
-  const preview = r.file_type === 'application/pdf'
-    ? `<a class="btn ghost" href="${fileUrl}" target="_blank" rel="noopener">Open PDF</a>`
-    : `<a href="${fileUrl}" target="_blank" rel="noopener"><img src="${fileUrl}" alt="Receipt image"></a>`;
+  const hasFile = Boolean(r.file_key);
+  const preview = !hasFile
+    ? `<p class="muted small">${isNew ? 'Manual entry, no receipt image.' : 'Entered manually, no receipt image.'}</p>`
+    : r.file_type === 'application/pdf'
+      ? `<a class="btn ghost" href="${fileUrl}" target="_blank" rel="noopener">Open PDF</a>`
+      : `<a href="${fileUrl}" target="_blank" rel="noopener"><img src="${fileUrl}" alt="Receipt image"></a>`;
 
   d.innerHTML = `
     <form method="dialog" class="editor-body">
       <div class="editor-head">
-        <h2>Receipt</h2>
+        <h2>${isNew ? 'New expense' : 'Receipt'}</h2>
         <button type="button" class="icon-btn" data-act="close" aria-label="Close">✕</button>
       </div>
       ${r.error ? `<p class="banner ${r.status === 'failed' ? 'bad' : 'warn'}">${esc(r.status === 'pending' ? `${settings.default_currency} amount pending: ${r.foreign_currency} ${money(r.foreign_amount)} recorded. Fill in the ${settings.default_currency} amount once you know it.` : r.error)}</p>` : ''}
-      <div class="editor-grid">
+      <div class="editor-grid ${hasFile ? '' : 'no-file'}">
         <div class="preview">${preview}</div>
         <div class="fields">
           <label>Date<input type="date" name="txn_date" value="${esc(r.txn_date)}"></label>
@@ -78,9 +91,9 @@ export async function openEditor(id, onChange = () => {}) {
         </div>
       </div>
       <div class="editor-actions">
-        <button type="button" class="btn danger ghost" data-act="delete">Delete</button>
+        ${isNew ? '' : '<button type="button" class="btn danger ghost" data-act="delete">Delete</button>'}
         <span class="spacer"></span>
-        <button type="button" class="btn ghost" data-act="retry">Re-run AI</button>
+        ${hasFile ? '<button type="button" class="btn ghost" data-act="retry">Re-run AI</button>' : ''}
         <button type="submit" class="btn primary" data-act="save">Save</button>
       </div>
     </form>`;
@@ -101,14 +114,17 @@ export async function openEditor(id, onChange = () => {}) {
     e.preventDefault();
     busy(true);
     try {
-      const saved = await api('/receipts/' + id, { method: 'PUT', body: JSON.stringify(formData(form)) });
+      const saved = isNew
+        ? await api('/receipts', { method: 'POST', body: JSON.stringify(formData(form)) })
+        : await api('/receipts/' + id, { method: 'PUT', body: JSON.stringify(formData(form)) });
       onChange(saved);
       toast(saved.status === 'ok' ? 'Saved' : saved.status === 'pending' ? 'Saved, RM amount still pending' : 'Saved, still needs: ' + saved.error, saved.status === 'ok' ? 'ok' : 'warn');
       d.close();
     } catch (err) { toast(err.message, 'bad'); busy(false); }
   };
 
-  form.querySelector('[data-act="retry"]').onclick = async (e) => {
+  const retryBtn = form.querySelector('[data-act="retry"]');
+  if (retryBtn) retryBtn.onclick = async (e) => {
     busy(true);
     e.target.textContent = 'Reading…';
     try {
@@ -119,7 +135,8 @@ export async function openEditor(id, onChange = () => {}) {
     } catch (err) { toast(err.message, 'bad'); busy(false); e.target.textContent = 'Re-run AI'; }
   };
 
-  form.querySelector('[data-act="delete"]').onclick = async () => {
+  const deleteBtn = form.querySelector('[data-act="delete"]');
+  if (deleteBtn) deleteBtn.onclick = async () => {
     if (!confirm('Delete this receipt and its image?')) return;
     busy(true);
     try {
