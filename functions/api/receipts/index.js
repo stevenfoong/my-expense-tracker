@@ -20,9 +20,16 @@ export async function onRequestGet({ request, env }) {
       `SELECT * FROM receipts WHERE txn_date BETWEEN ? AND ? ORDER BY txn_date DESC, created_at DESC`
     ).bind(period.start, period.end).all());
   } else if (status) {
-    const list = status.split(',').map((s) => s.trim()).filter(Boolean);
+    // "stuck" = still "processing" after 10 minutes (the request died mid-read)
+    const list = status.split(',').map((s) => s.trim()).filter((s) => s && s !== 'stuck');
+    const stuck = status.split(',').includes('stuck');
+    const where = [
+      list.length ? `status IN (${list.map(() => '?').join(',')})` : null,
+      stuck ? `(status = 'processing' AND created_at < datetime('now', '-10 minutes'))` : null,
+    ].filter(Boolean).join(' OR ');
+    if (!where) return fail('Unknown status filter');
     ({ results: rows } = await env.DB.prepare(
-      `SELECT * FROM receipts WHERE status IN (${list.map(() => '?').join(',')}) ORDER BY created_at DESC`
+      `SELECT * FROM receipts WHERE ${where} ORDER BY created_at DESC`
     ).bind(...list).all());
   } else {
     return fail('Pass month=YYYY-MM or status=...');

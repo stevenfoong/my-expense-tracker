@@ -113,7 +113,7 @@ const pillClass = (s) => ({ ok: 'ok', review: 'warn', failed: 'bad', error: 'bad
 
 async function loadAttention() {
   try {
-    const { receipts } = await api('/receipts?status=review,failed');
+    const { receipts } = await api('/receipts?status=review,failed,stuck');
     const sec = el.querySelector('[data-sec="attention"]');
     sec.hidden = receipts.length === 0;
     attentionEl.innerHTML = '';
@@ -123,11 +123,11 @@ async function loadAttention() {
       li.innerHTML = `
         <div class="row-main">
           <span class="row-title">${esc(r.merchant || r.file_name || 'Unreadable receipt')}</span>
-          <span class="row-sub">${esc(r.error || '')}</span>
+          <span class="row-sub">${esc(r.status === 'processing' ? 'Reading was interrupted. Open and press Re-run AI.' : r.error || '')}</span>
         </div>
         <div class="row-end">
           ${r.total !== null ? `<span class="amount">${money(r.total, r.currency)}</span>` : ''}
-          <span class="pill ${r.status === 'failed' ? 'bad' : 'warn'}">${r.status === 'failed' ? 'AI failed' : 'Review'}</span>
+          <span class="pill ${r.status === 'review' ? 'warn' : 'bad'}">${{ failed: 'AI failed', processing: 'Stuck' }[r.status] || 'Review'}</span>
         </div>`;
       li.onclick = () => openEditor(r.id, () => loadAttention());
       attentionEl.append(li);

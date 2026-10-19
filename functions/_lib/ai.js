@@ -21,13 +21,19 @@ Rules:
 - Do not guess values that are not on the receipt; use "" instead.`;
 }
 
-/** Calls Ollama /api/chat through Cloudflare Access. Returns parsed JSON content. */
+/**
+ * Calls Ollama /api/chat through Cloudflare Access and returns the parsed JSON content.
+ * - Streams the reply, so the connection through the tunnel stays alive on slow hardware
+ *   (Cloudflare drops requests that send nothing back for ~100 seconds).
+ * - Turns off "thinking" so the model answers directly instead of reasoning first.
+ */
 export async function callOllama(env, settings, message) {
   if (!settings.ai_url) throw new Error('AI URL is not set (Settings tab)');
 
-  const res = await fetch(settings.ai_url + '/api/chat', {
+  const send = (withThinkFlag) => fetch(settings.ai_url + '/api/chat', {
     method: 'POST',
     redirect: 'manual',
+    signal: AbortSignal.timeout(5 * 60 * 1000),
     headers: {
       'content-type': 'application/json',
       'CF-Access-Client-Id': env.CF_ACCESS_CLIENT_ID || '',
@@ -35,14 +41,22 @@ export async function callOllama(env, settings, message) {
     },
     body: JSON.stringify({
       model: settings.ai_model,
-      stream: false,
+      stream: true,
       format: 'json',
       keep_alive: '30m',
-      options: { temperature: 0 },
+      ...(withThinkFlag ? { think: false } : {}),
+      options: { temperature: 0, num_predict: 1500 },
       messages: [message],
     }),
   });
 
+  let res = await send(true);
+  if (res.status === 400) {
+    // Models without a thinking mode reject the flag: retry without it.
+    const body = await res.text();
+    if (/think/i.test(body)) res = await send(false);
+    else throw new Error(`AI request failed (400): ${body.slice(0, 300)}`);
+  }
   if (res.status >= 300 && res.status < 400) {
     throw new Error(`AI blocked by Cloudflare Access (${res.status}). Check the service token secrets and the Service Auth policy.`);
   }
@@ -50,10 +64,31 @@ export async function callOllama(env, settings, message) {
     const body = (await res.text()).slice(0, 300);
     throw new Error(`AI request failed (${res.status}): ${body}`);
   }
-  const data = await res.json();
+
+  // Read the NDJSON stream and join the content pieces.
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = '', content = '', doneReason = '';
+  const handle = (line) => {
+    if (!line.trim()) return;
+    const chunk = JSON.parse(line);
+    if (chunk.error) throw new Error('AI error: ' + chunk.error);
+    if (chunk.message?.content) content += chunk.message.content;
+    if (chunk.done) doneReason = chunk.done_reason || 'stop';
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    lines.forEach(handle);
+  }
+  handle(buffer);
+
   try {
-    return JSON.parse(data.message.content);
+    return JSON.parse(content);
   } catch {
+    if (doneReason === 'length') throw new Error('AI answer was cut off (too long). Try Re-run AI, or a clearer photo.');
     throw new Error('AI did not return valid JSON');
   }
 }
