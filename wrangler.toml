@@ -4,12 +4,12 @@ pages_build_output_dir = "public"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "expense-tracker"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_name = "my-expense-tracker-d1"
+database_id = "77b90af0-bd36-4733-a92c-63e61daeb614"
 
 [[r2_buckets]]
 binding = "BUCKET"
-bucket_name = "expense-receipts"
+bucket_name = "my-expense-tracker-r2"
 
 [ai]
 binding = "AI"
