@@ -1,5 +1,7 @@
 import { api, esc, money, fmtDate, toast } from '../lib.js';
 import { openLineEditor } from '../components/line-editor.js';
+import { openEditor } from '../components/editor.js';
+import { reconcileSection, wireReconcile } from './statements-reconcile.js';
 
 let el, current = null;
 
@@ -122,7 +124,7 @@ function render(s) {
       <h3>Check against bank totals</h3>
       <ul class="checks">${s.checks.map(checkRow).join('')}</ul>
       ${s.checks_ok
-        ? `<p class="banner ok">All totals match. Every transaction was read correctly. Matching with your records comes in the next step.</p>`
+        ? `<p class="banner ok">All totals match. Every transaction was read correctly.</p>`
         : failed.length
           ? `<p class="banner ${s.accepted ? 'warn' : 'bad'}">${s.accepted
               ? 'Differences accepted. You can still fix the lines below.'
@@ -131,7 +133,11 @@ function render(s) {
           : ''}
     </div>
 
-    ${s.cards.map((c) => cardSection(s, c, editable)).join('')}
+    ${reconcileSection(s)}
+
+    ${s.reconcile
+      ? `<details class="card fold"><summary><h3>Statement lines (${s.lines.length})</h3></summary>${s.cards.map((c) => cardSection(s, c, editable)).join('')}</details>`
+      : s.cards.map((c) => cardSection(s, c, editable)).join('')}
 
     <div class="card">
       <details class="raw">
@@ -141,6 +147,7 @@ function render(s) {
       <div class="inline-actions">
         ${editable ? '<button type="button" class="btn ghost" data-act="reparse">Read again</button>' : ''}
         <button type="button" class="btn ghost danger" data-act="delete">Delete statement</button>
+        ${s.status === 'saved' ? '<span class="muted small">Deleting a saved statement also removes the expenses it added and unlinks matched records.</span>' : ''}
       </div>
     </div>`;
 
@@ -209,6 +216,7 @@ function lineRow(l, editable) {
 
 function wire(s, editable) {
   const refresh = (next) => { if (next) render(next); };
+  wireReconcile(el, s, refresh, (id) => openEditor(id, () => loadDetail(s.id)));
 
   el.querySelector('[data-act="date"]')?.addEventListener('change', async (e) => {
     try { refresh(await api('/statements/' + s.id, { method: 'PUT', body: JSON.stringify({ statement_date: e.target.value }) })); }
@@ -227,7 +235,9 @@ function wire(s, editable) {
   });
 
   el.querySelector('[data-act="delete"]').addEventListener('click', async () => {
-    if (!confirm('Delete this statement and its PDF?')) return;
+    if (!confirm(s.status === 'saved'
+      ? 'Delete this saved statement? The expenses it added are removed and matched records are unlinked.'
+      : 'Delete this statement and its PDF?')) return;
     try { await api('/statements/' + s.id, { method: 'DELETE' }); toast('Statement deleted', 'ok'); location.hash = 'statements'; }
     catch (err) { toast(err.message, 'bad'); }
   });

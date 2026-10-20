@@ -1,5 +1,6 @@
 import { json, fail, normaliseDate } from '../../../_lib/util.js';
 import { loadStatement } from '../../../_lib/statements.js';
+import { undoSavedStmts } from '../../../_lib/reconcile.js';
 
 // GET /api/statements/:id
 export async function onRequestGet({ params, env }) {
@@ -16,7 +17,7 @@ export async function onRequestPut({ params, request, env }) {
   if ('statement_date' in body) {
     const d = normaliseDate(body.statement_date);
     if (!d) return fail('Invalid statement date');
-    await env.DB.prepare(`UPDATE statements SET statement_date = ?, updated_at = datetime('now') WHERE id = ?`).bind(d, params.id).run();
+    await env.DB.prepare(`UPDATE statements SET statement_date = ?, matched_at = NULL, updated_at = datetime('now') WHERE id = ?`).bind(d, params.id).run();
   }
   if ('accepted' in body) {
     await env.DB.prepare(`UPDATE statements SET accepted = ?, updated_at = datetime('now') WHERE id = ?`).bind(body.accepted ? 1 : 0, params.id).run();
@@ -26,9 +27,11 @@ export async function onRequestPut({ params, request, env }) {
 
 // DELETE /api/statements/:id -> removes the statement, its lines and the PDF
 export async function onRequestDelete({ params, env }) {
-  const s = await env.DB.prepare('SELECT file_key FROM statements WHERE id = ?').bind(params.id).first();
+  const s = await env.DB.prepare('SELECT file_key, status FROM statements WHERE id = ?').bind(params.id).first();
   if (!s) return fail('Not found', 404);
   await env.DB.batch([
+    // A saved statement: remove the expenses it created and unlink matched records first
+    ...(s.status === 'saved' ? undoSavedStmts(env, params.id) : []),
     env.DB.prepare('DELETE FROM statement_lines WHERE statement_id = ?').bind(params.id),
     env.DB.prepare('DELETE FROM statements WHERE id = ?').bind(params.id),
   ]);

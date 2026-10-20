@@ -29,6 +29,16 @@ export async function onRequestPut({ request, env }) {
     updates.categories = JSON.stringify(list);
   }
 
+  if ('card_modes' in b) {
+    const modes = {};
+    for (const [card, mode] of Object.entries(b.card_modes || {})) {
+      if (!/^\d{4}$/.test(card) || !['match', 'record', 'skip'].includes(mode)) return fail('Invalid card mode');
+      modes[card] = mode;
+    }
+    const current = (await getSettings(env.DB)).card_modes;
+    updates.card_modes = JSON.stringify({ ...current, ...modes });
+  }
+
   await env.DB.batch(
     Object.entries(updates).map(([k, v]) =>
       env.DB.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(k, v)

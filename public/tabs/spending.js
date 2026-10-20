@@ -129,7 +129,7 @@ function renderList() {
         <span class="row-sub">${esc([fmtDate(r.txn_date), r.category, r.area].filter(Boolean).join(' · '))}</span>
       </div>
       <div class="row-end">
-        <span class="amount">${r.total !== null ? money(r.total, homeCurrency) : money(r.foreign_amount, r.foreign_currency)}</span>
+        <span class="amount">${r.statement_line_id ? '<span class="tick" title="On card statement" aria-label="On card statement">✓</span>' : ''}${r.total !== null ? money(r.total, homeCurrency) : money(r.foreign_amount, r.foreign_currency)}</span>
         ${r.total !== null && r.foreign_amount !== null ? `<span class="row-sub">${money(r.foreign_amount, r.foreign_currency)}</span>` : ''}
         ${r.status === 'pending' ? `<span class="pill warn">${homeCurrency} pending</span>` : r.status !== 'ok' ? `<span class="pill ${r.status === 'failed' ? 'bad' : 'warn'}">Review</span>` : ''}
       </div>`;

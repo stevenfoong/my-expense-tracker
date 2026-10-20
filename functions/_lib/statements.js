@@ -1,5 +1,6 @@
 import { parseUobStatement, computeChecks } from './uob.js';
 import { cyclePeriod, safeParse } from './util.js';
+import { reconcileView } from './reconcile.js';
 
 const AMOUNT_IN_TEXT = /(?:\d{1,3}(?:,\d{3})+|\d+)?\.\d{2}\b/;
 
@@ -15,7 +16,7 @@ export async function storeParsed(env, id, parsed) {
   const stmts = [
     env.DB.prepare(
       `UPDATE statements SET statement_date = ?, summary = ?, cards = ?, warnings = ?, accepted = 0,
-         updated_at = datetime('now') WHERE id = ?`
+         matched_at = NULL, record_decisions = NULL, updated_at = datetime('now') WHERE id = ?`
     ).bind(parsed.statement_date, JSON.stringify(parsed.summary), JSON.stringify(cards), JSON.stringify(parsed.warnings), id),
     env.DB.prepare('DELETE FROM statement_lines WHERE statement_id = ?').bind(id),
   ];
@@ -66,6 +67,9 @@ export async function loadStatement(env, id) {
     checks,
     checks_ok: ok,
     raw_text: s.raw_text,
+    matched_at: s.matched_at,
+    saved_at: s.saved_at,
+    reconcile: await reconcileView(env, s, lines),
   };
 }
 

@@ -41,11 +41,41 @@ const STATEMENT_TABLES = [
   `CREATE INDEX IF NOT EXISTS idx_statement_lines_stmt ON statement_lines (statement_id)`,
 ];
 
+// Columns added after a table was first created: [table, column, type]
+const ADDED_COLUMNS = [
+  ['receipts', 'statement_line_id', 'INTEGER'],
+  ['statements', 'matched_at', 'TEXT'],
+  ['statements', 'saved_at', 'TEXT'],
+  ['statements', 'record_decisions', 'TEXT'],
+  ['statement_lines', 'match_receipt_id', 'TEXT'],
+  ['statement_lines', 'match_type', 'TEXT'],
+  ['statement_lines', 'decision', 'TEXT'],
+  ['statement_lines', 'category', 'TEXT'],
+  ['statement_lines', 'category_source', 'TEXT'],
+];
+
+async function columnsOf(db, table) {
+  const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
+  return new Set(results.map((c) => c.name));
+}
+
+async function addMissingColumns(db) {
+  const cache = {};
+  for (const [table, col, type] of ADDED_COLUMNS) {
+    cache[table] ??= await columnsOf(db, table);
+    if (cache[table].has(col)) continue;
+    try { await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run(); }
+    catch (e) { if (!/duplicate column/i.test(String(e.message))) throw e; }
+  }
+}
+
 export async function ensureSchema(db) {
   if (done) return;
   await db.batch(STATEMENT_TABLES.map((sql) => db.prepare(sql)));
-  const { results } = await db.prepare('PRAGMA table_info(receipts)').all();
-  const cols = new Set(results.map((c) => c.name));
+  await addMissingColumns(db);
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_receipts_stmt_line ON receipts (statement_line_id)`).run();
+  await db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('card_modes', '{}')`).run();
+  const cols = await columnsOf(db, 'receipts');
 
   if (!cols.has('foreign_currency') || !cols.has('foreign_amount')) {
     for (const sql of [

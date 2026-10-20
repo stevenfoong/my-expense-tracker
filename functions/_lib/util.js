@@ -15,6 +15,8 @@ export async function getSettings(db) {
     ai_model: s.ai_model || 'gemma4:e4b',
     default_currency: s.default_currency || 'RM',
     categories: safeParse(s.categories, []),
+    // Per card (last 4 digits): 'match' | 'record' | 'skip'. Cards not listed default to 'match'.
+    card_modes: safeParse(s.card_modes, {}),
   };
 }
 

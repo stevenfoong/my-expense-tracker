@@ -41,7 +41,7 @@ export async function openEditor(id, onChange = () => {}) {
   const fileUrl = `/api/receipts/${id}/file`;
   const hasFile = Boolean(r.file_key);
   const preview = !hasFile
-    ? `<p class="muted small">${isNew ? 'Manual entry, no receipt image.' : 'Entered manually, no receipt image.'}</p>`
+    ? `<p class="muted small">${isNew ? 'Manual entry, no receipt image.' : r.file_type === 'statement' ? 'Added from a card statement.' : 'Entered manually, no receipt image.'}</p>`
     : r.file_type === 'application/pdf'
       ? `<a class="btn ghost" href="${fileUrl}" target="_blank" rel="noopener">Open PDF</a>`
       : `<a href="${fileUrl}" target="_blank" rel="noopener"><img src="${fileUrl}" alt="Receipt image"></a>`;
@@ -94,6 +94,7 @@ export async function openEditor(id, onChange = () => {}) {
         ${isNew ? '' : '<button type="button" class="btn danger ghost" data-act="delete">Delete</button>'}
         <span class="spacer"></span>
         ${hasFile ? '<button type="button" class="btn ghost" data-act="retry">Re-run AI</button>' : ''}
+        ${r.statement_line_id ? '<span class="muted small">✓ On statement</span>' : ''}
         <button type="submit" class="btn primary" data-act="save">Save</button>
       </div>
     </form>`;

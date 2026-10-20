@@ -1,6 +1,7 @@
-import { json, fail } from '../../../../_lib/util.js';
-import { loadStatement } from '../../../../_lib/statements.js';
-import { lineValues } from '../../../../_lib/statement-line.js';
+import { json, fail } from '../../../../../_lib/util.js';
+import { loadStatement } from '../../../../../_lib/statements.js';
+import { lineValues } from '../../../../../_lib/statement-line.js';
+import { resetMatchingStmt } from '../../../../../_lib/reconcile.js';
 
 async function getLine(env, params) {
   const s = await env.DB.prepare('SELECT status FROM statements WHERE id = ?').bind(params.id).first();
@@ -25,6 +26,7 @@ export async function onRequestPut({ params, request, env }) {
     ).bind(v.txn_date, v.description, v.merchant, v.location, v.amount, v.is_credit, v.kind,
       v.foreign_currency, v.foreign_amount, line.id),
     env.DB.prepare(`UPDATE statements SET accepted = 0, updated_at = datetime('now') WHERE id = ?`).bind(params.id),
+    ...resetMatchingStmt(env, params.id),
   ]);
   return json(await loadStatement(env, params.id));
 }
@@ -36,6 +38,7 @@ export async function onRequestDelete({ params, env }) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM statement_lines WHERE id = ?').bind(line.id),
     env.DB.prepare(`UPDATE statements SET accepted = 0, updated_at = datetime('now') WHERE id = ?`).bind(params.id),
+    ...resetMatchingStmt(env, params.id),
   ]);
   return json(await loadStatement(env, params.id));
 }

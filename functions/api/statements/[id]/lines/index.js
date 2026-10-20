@@ -1,6 +1,7 @@
 import { json, fail } from '../../../../_lib/util.js';
 import { loadStatement } from '../../../../_lib/statements.js';
 import { lineValues } from '../../../../_lib/statement-line.js';
+import { resetMatchingStmt } from '../../../../_lib/reconcile.js';
 
 // POST /api/statements/:id/lines  { card, txn_date, merchant, location, amount, is_credit, foreign_currency, foreign_amount }
 export async function onRequestPost({ params, request, env }) {
@@ -24,6 +25,6 @@ export async function onRequestPost({ params, request, env }) {
        amount, is_credit, kind, foreign_currency, foreign_amount, manual) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, 1)`
   ).bind(params.id, body.card, lineNo, v.txn_date, v.description, v.merchant, v.location,
     v.amount, v.is_credit, v.kind, v.foreign_currency, v.foreign_amount).run();
-  await env.DB.prepare(`UPDATE statements SET accepted = 0, updated_at = datetime('now') WHERE id = ?`).bind(params.id).run();
+  await env.DB.batch([env.DB.prepare(`UPDATE statements SET accepted = 0, updated_at = datetime('now') WHERE id = ?`).bind(params.id), ...resetMatchingStmt(env, params.id)]);
   return json(await loadStatement(env, params.id), 201);
 }
