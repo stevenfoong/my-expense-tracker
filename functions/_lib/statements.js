@@ -58,6 +58,7 @@ export async function loadStatement(env, id) {
     statement_date: s.statement_date,
     period: periodOf(s.statement_date),
     file_name: s.file_name,
+    has_file: Boolean(s.file_key),
     status: s.status,
     accepted: Boolean(s.accepted),
     summary,

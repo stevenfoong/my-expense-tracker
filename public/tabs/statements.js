@@ -113,7 +113,7 @@ function render(s) {
           <h2>Statement ${s.statement_date ? fmtDate(s.statement_date) : ''}</h2>
           <span class="muted small">${s.period ? `${fmtDate(s.period.start)} – ${fmtDate(s.period.end)}` : 'Statement date not found'}</span>
         </div>
-        <a class="btn ghost small" href="/api/statements/${s.id}/file" target="_blank" rel="noopener">PDF</a>
+        ${s.has_file ? `<a class="btn ghost small" href="/api/statements/${s.id}/file" target="_blank" rel="noopener">PDF</a>` : '<span class="muted small">PDF deleted</span>'}
       </div>
       ${!s.statement_date ? `
         <label>Statement date<input type="date" data-act="date"></label>` : ''}

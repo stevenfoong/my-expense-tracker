@@ -35,6 +35,6 @@ export async function onRequestDelete({ params, env }) {
     env.DB.prepare('DELETE FROM statement_lines WHERE statement_id = ?').bind(params.id),
     env.DB.prepare('DELETE FROM statements WHERE id = ?').bind(params.id),
   ]);
-  await env.BUCKET.delete(s.file_key);
+  if (s.file_key) await env.BUCKET.delete(s.file_key);
   return json({ deleted: params.id });
 }

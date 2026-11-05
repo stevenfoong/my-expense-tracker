@@ -275,3 +275,17 @@ input.include { width: 20px; height: 20px; flex: none; accent-color: var(--accen
 
 .ai-time { white-space: nowrap; }
 #ai-summary { margin-left: auto; text-align: right; }
+
+/* Storage */
+.storage #storage { display: grid; gap: 14px; }
+.meter { display: grid; gap: 4px; }
+.meter-head { display: flex; justify-content: space-between; gap: 10px; font-size: .9rem; }
+.meter-track { height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.meter-fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.meter-fill.warn { background: var(--warn); }
+.year-row { display: flex; gap: 10px; align-items: center; padding: 10px 2px; border-top: 1px solid var(--border); }
+.year-row:first-child { border-top: 0; }
+.year-row .row-sub { white-space: normal; }
+.year-row .progress:empty { display: none; }
+.year-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.btn.danger-solid { background: var(--bad); color: #fff; border-color: transparent; }

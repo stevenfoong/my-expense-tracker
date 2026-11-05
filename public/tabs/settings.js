@@ -1,4 +1,5 @@
 import { api, esc, toast, getSettings, setSettingsCache } from '../lib.js';
+import { mountStorage } from '../components/storage.js';
 
 let el;
 
@@ -45,7 +46,12 @@ async function show() {
       </label>
 
       <div class="form-actions"><button class="btn primary" type="submit">Save settings</button></div>
-    </form>`;
+    </form>
+    <div class="card storage">
+      <h2>Storage</h2>
+      <div id="storage"></div>
+    </div>`;
+  mountStorage(el.querySelector('#storage'));
 
   const form = el.querySelector('#settings-form');
   form.onsubmit = async (e) => {
