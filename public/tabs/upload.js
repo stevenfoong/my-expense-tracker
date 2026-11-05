@@ -34,7 +34,7 @@ function mount(root) {
       <ul class="list" id="attention"></ul>
     </div>
     <div class="card" data-sec="recent" hidden>
-      <h3>Recent uploads</h3>
+      <div class="list-head"><h3>Recent uploads</h3><span class="muted small" id="ai-summary"></span></div>
       <ul class="list" id="recent"></ul>
     </div>`;
 
@@ -136,6 +136,15 @@ const STATUS_PILL = {
   pending: ['warn', 'RM pending'],
 };
 
+const fmtSeconds = (s) => (s >= 60 ? `${Math.floor(s / 60)}m ${Math.round(s % 60)}s` : `${s < 10 ? s.toFixed(1) : Math.round(s)}s`);
+
+function aiSummary(receipts) {
+  const t = receipts.map((r) => r.ai_seconds).filter((x) => x != null);
+  if (!t.length) return '';
+  const avg = t.reduce((a, b) => a + b, 0) / t.length;
+  return `AI time: avg ${fmtSeconds(avg)}, longest ${fmtSeconds(Math.max(...t))}`;
+}
+
 function receiptRow(r, { showDate = true } = {}) {
   const li = document.createElement('li');
   li.className = 'row clickable';
@@ -148,7 +157,7 @@ function receiptRow(r, { showDate = true } = {}) {
   li.innerHTML = `
     <div class="row-main">
       <span class="row-title">${esc(r.merchant || r.file_name || 'Unreadable receipt')}</span>
-      <span class="row-sub">${esc(sub)}</span>
+      <span class="row-sub">${esc(sub)}${r.ai_seconds != null ? `<span class="ai-time"> · AI ${fmtSeconds(r.ai_seconds)}</span>` : ''}</span>
     </div>
     <div class="row-end">
       ${r.total !== null ? `<span class="amount">${money(r.total, r.currency)}</span>`
@@ -174,6 +183,7 @@ async function loadRecent() {
     const { receipts } = await api('/receipts?recent=' + RECENT_COUNT);
     el.querySelector('[data-sec="recent"]').hidden = receipts.length === 0;
     recentEl.replaceChildren(...receipts.map((r) => receiptRow(r)));
+    el.querySelector('#ai-summary').textContent = aiSummary(receipts);
   } catch (e) {
     toast(e.message, 'bad');
   }

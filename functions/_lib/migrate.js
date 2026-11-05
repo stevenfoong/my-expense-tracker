@@ -44,6 +44,7 @@ const STATEMENT_TABLES = [
 // Columns added after a table was first created: [table, column, type]
 const ADDED_COLUMNS = [
   ['receipts', 'statement_line_id', 'INTEGER'],
+  ['receipts', 'ai_seconds', 'REAL'],
   ['statements', 'matched_at', 'TEXT'],
   ['statements', 'saved_at', 'TEXT'],
   ['statements', 'record_decisions', 'TEXT'],

@@ -272,3 +272,6 @@ input.include { width: 20px; height: 20px; flex: none; accent-color: var(--accen
 .save-text { flex: 1; display: grid; gap: 1px; }
 .link-select { width: auto; max-width: 90px; padding: 6px 8px; font-size: .85rem; }
 @media (min-width: 641px) { .save-card { bottom: 12px; } }
+
+.ai-time { white-space: nowrap; }
+#ai-summary { margin-left: auto; text-align: right; }

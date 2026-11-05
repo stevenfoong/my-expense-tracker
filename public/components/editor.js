@@ -95,6 +95,7 @@ export async function openEditor(id, onChange = () => {}) {
         <span class="spacer"></span>
         ${hasFile ? '<button type="button" class="btn ghost" data-act="retry">Re-run AI</button>' : ''}
         ${r.statement_line_id ? '<span class="muted small">✓ On statement</span>' : ''}
+        ${r.ai_seconds != null ? `<span class="muted small">AI took ${r.ai_seconds}s</span>` : ''}
         <button type="submit" class="btn primary" data-act="save">Save</button>
       </div>
     </form>`;
