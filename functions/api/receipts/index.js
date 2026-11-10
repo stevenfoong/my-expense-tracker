@@ -1,6 +1,7 @@
 import { json, fail, getSettings, cyclePeriod, newId } from '../../_lib/util.js';
 import { processReceipt } from '../../_lib/process.js';
 import { applyEdit } from '../../_lib/edit.js';
+import { parseQuery, matches } from '../../../public/search.js';
 
 const ALLOWED = /^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/;
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -13,9 +14,19 @@ export async function onRequestGet({ request, env }) {
   const month = url.searchParams.get('month');
   const status = url.searchParams.get('status');
   const recent = url.searchParams.get('recent');
+  const q = parseQuery(url.searchParams.get('q'));
 
   let rows, period = null;
-  if (recent) {
+  if (q) {
+    // Search across all months (personal volumes: filtering in code is fine)
+    const { results } = await env.DB.prepare(
+      `SELECT id, txn_date, created_at, merchant, total, currency, foreign_currency, foreign_amount, category, area,
+         payment_method, notes, status, error, file_key, file_type, statement_line_id
+       FROM receipts ORDER BY txn_date DESC, created_at DESC`
+    ).all();
+    const found = results.filter((r) => matches(r, q));
+    return json({ receipts: found.slice(0, 200), total_matches: found.length });
+  } else if (recent) {
     const n = Math.min(Math.max(parseInt(recent, 10) || 10, 1), 50);
     ({ results: rows } = await env.DB.prepare(
       `SELECT * FROM receipts ORDER BY created_at DESC, rowid DESC LIMIT ?`
@@ -39,7 +50,7 @@ export async function onRequestGet({ request, env }) {
       `SELECT * FROM receipts WHERE ${where} ORDER BY created_at DESC`
     ).bind(...list).all());
   } else {
-    return fail('Pass month=YYYY-MM, status=... or recent=N');
+    return fail('Pass month=YYYY-MM, status=..., recent=N or q=...');
   }
 
   for (const r of rows) delete r.raw_ai;

@@ -1,7 +1,9 @@
 import { api, esc, money, fmtDate, toast, getSettings } from '../lib.js';
+import { parseQuery, matches } from '../search.js';
 import { openEditor } from '../components/editor.js';
 
 let el, monthInput, rows = [], homeCurrency = 'RM';
+let allMonths = null; // results of a search across all months, or null
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -38,8 +40,12 @@ async function mount(root) {
     <div class="card">
       <div class="list-head">
         <h3>Receipts</h3>
-        <select id="filter" aria-label="Filter by category"><option value="">All categories</option></select>
+        <div class="list-tools">
+          <input type="search" id="search" placeholder="Search merchant or amount" aria-label="Search merchant or amount" autocomplete="off">
+          <select id="filter" aria-label="Filter by category"><option value="">All categories</option></select>
+        </div>
       </div>
+      <div class="search-bar" id="search-bar" hidden></div>
       <ul class="list" id="list"></ul>
     </div>`;
 
@@ -53,6 +59,20 @@ async function mount(root) {
     b.addEventListener('click', () => { monthInput.value = shiftMonth(monthInput.value, +b.dataset.step); load(); })
   );
   el.querySelector('#filter').addEventListener('change', renderList);
+  let t;
+  el.querySelector('#search').addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(() => { allMonths = null; renderList(); }, 150);
+  });
+}
+
+async function searchAllMonths() {
+  const q = el.querySelector('#search').value.trim();
+  if (!q) return;
+  try {
+    allMonths = await api('/receipts?q=' + encodeURIComponent(q));
+    renderList();
+  } catch (e) { toast(e.message, 'bad'); }
 }
 
 function show(month) {
@@ -114,9 +134,30 @@ function renderSummary() {
 function renderList() {
   const f = el.querySelector('#filter').value;
   const list = el.querySelector('#list');
-  const shown = f ? rows.filter((r) => (r.category || 'Uncategorised') === f) : rows;
+  const bar = el.querySelector('#search-bar');
+  const q = parseQuery(el.querySelector('#search').value);
+
+  const source = allMonths ? allMonths.receipts : rows;
+  const shown = source
+    .filter((r) => !f || (r.category || 'Uncategorised') === f)
+    .filter((r) => allMonths || matches(r, q));
+
+  if (q) {
+    const sum = shown.reduce((t, r) => t + (r.total || 0), 0);
+    bar.hidden = false;
+    bar.innerHTML = allMonths
+      ? `<span><strong>${allMonths.total_matches}</strong> match${allMonths.total_matches === 1 ? '' : 'es'} in all months${allMonths.total_matches > shown.length ? ` (showing ${shown.length})` : ''} · ${money(sum, homeCurrency)}</span>
+         <button type="button" class="btn ghost small" data-act="this-month">This month only</button>`
+      : `<span><strong>${shown.length}</strong> match${shown.length === 1 ? '' : 'es'} this month · ${money(sum, homeCurrency)}</span>
+         <button type="button" class="btn ghost small" data-act="all-months">Search all months</button>`;
+    bar.querySelector('[data-act="all-months"]')?.addEventListener('click', searchAllMonths);
+    bar.querySelector('[data-act="this-month"]')?.addEventListener('click', () => { allMonths = null; renderList(); });
+  } else {
+    bar.hidden = true;
+  }
+
   if (!shown.length) {
-    list.innerHTML = '<li class="empty muted">No receipts in this period.</li>';
+    list.innerHTML = `<li class="empty muted">${q ? 'No matches.' : 'No receipts in this period.'}</li>`;
     return;
   }
   list.innerHTML = '';
@@ -133,7 +174,7 @@ function renderList() {
         ${r.total !== null && r.foreign_amount !== null ? `<span class="row-sub">${money(r.foreign_amount, r.foreign_currency)}</span>` : ''}
         ${r.status === 'pending' ? `<span class="pill warn">${homeCurrency} pending</span>` : r.status !== 'ok' ? `<span class="pill ${r.status === 'failed' ? 'bad' : 'warn'}">Review</span>` : ''}
       </div>`;
-    li.onclick = () => openEditor(r.id, () => load());
+    li.onclick = () => openEditor(r.id, () => (allMonths ? searchAllMonths() : load()));
     list.append(li);
   }
 }

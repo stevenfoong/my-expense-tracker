@@ -289,3 +289,13 @@ input.include { width: 20px; height: 20px; flex: none; accent-color: var(--accen
 .year-row .progress:empty { display: none; }
 .year-actions { display: flex; flex-direction: column; gap: 6px; flex: none; }
 .btn.danger-solid { background: var(--bad); color: #fff; border-color: transparent; }
+
+/* Spending search */
+.list-head { flex-wrap: wrap; }
+.list-tools { display: flex; gap: 8px; margin-left: auto; flex: 1 1 320px; justify-content: flex-end; }
+.list-tools input[type=search] { flex: 1 1 180px; max-width: 280px; }
+.list-tools select { width: auto; flex: none; margin-left: 0; }
+@media (max-width: 640px) { .list-tools { flex-basis: 100%; } .list-tools input[type=search] { max-width: none; } }
+.search-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .85rem; color: var(--muted);
+  background: var(--surface-2); padding: 6px 10px; border-radius: 8px; }
+.search-bar[hidden] { display: none; }
