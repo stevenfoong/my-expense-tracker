@@ -45,6 +45,7 @@ const STATEMENT_TABLES = [
 const ADDED_COLUMNS = [
   ['receipts', 'statement_line_id', 'INTEGER'],
   ['receipts', 'ai_seconds', 'REAL'],
+  ['receipts', 'upload_id', 'TEXT'],
   ['statements', 'matched_at', 'TEXT'],
   ['statements', 'saved_at', 'TEXT'],
   ['statements', 'record_decisions', 'TEXT'],
@@ -75,6 +76,7 @@ export async function ensureSchema(db) {
   await db.batch(STATEMENT_TABLES.map((sql) => db.prepare(sql)));
   await addMissingColumns(db);
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_receipts_stmt_line ON receipts (statement_line_id)`).run();
+  await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_receipts_upload ON receipts (upload_id) WHERE upload_id IS NOT NULL`).run();
   await db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('card_modes', '{}')`).run();
   const cols = await columnsOf(db, 'receipts');
 

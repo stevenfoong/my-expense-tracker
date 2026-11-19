@@ -17,6 +17,14 @@ export async function onRequestGet({ request, env }) {
   const q = parseQuery(url.searchParams.get('q'));
 
   let rows, period = null;
+  const uploadId = url.searchParams.get('upload_id');
+  if (uploadId) {
+    // Lets the page check whether an upload it lost track of actually went through
+    const r = await env.DB.prepare('SELECT * FROM receipts WHERE upload_id = ?').bind(uploadId).first();
+    if (!r) return fail('Not found', 404);
+    delete r.raw_ai;
+    return json(r);
+  }
   if (q) {
     // Search across all months (personal volumes: filtering in code is fine)
     const { results } = await env.DB.prepare(
@@ -82,14 +90,39 @@ export async function onRequestPost({ request, env }) {
   if (!ALLOWED.test(file.type)) return fail('Only images and PDFs are supported');
   if (file.size > MAX_BYTES) return fail('File is larger than 10 MB');
 
+  // Same upload sent again (retry after a lost reply): return the receipt that already exists
+  const uploadId = String(form.get('upload_id') || '').slice(0, 64) || null;
+  if (uploadId) {
+    const existing = await env.DB.prepare('SELECT * FROM receipts WHERE upload_id = ?').bind(uploadId).first();
+    if (existing) {
+      const stale = existing.status === 'processing' && Date.parse(existing.updated_at.replace(' ', 'T') + 'Z') < Date.now() - 3 * 60_000;
+      const row = existing.status === 'failed' || stale
+        ? await processReceipt(env, await getSettings(env.DB), existing.id)
+        : existing;
+      delete row.raw_ai;
+      return json(row, 200);
+    }
+  }
+
   const id = newId();
   const ext = file.type === 'application/pdf' ? 'pdf' : file.type.split('/')[1].replace('jpeg', 'jpg');
   const key = `receipts/${new Date().toISOString().slice(0, 7)}/${id}.${ext}`;
 
   await env.BUCKET.put(key, await file.arrayBuffer(), { httpMetadata: { contentType: file.type } });
-  await env.DB.prepare(
-    `INSERT INTO receipts (id, status, file_key, file_type, file_name) VALUES (?, 'processing', ?, ?, ?)`
-  ).bind(id, key, file.type, file.name || null).run();
+  try {
+    await env.DB.prepare(
+      `INSERT INTO receipts (id, status, file_key, file_type, file_name, upload_id) VALUES (?, 'processing', ?, ?, ?, ?)`
+    ).bind(id, key, file.type, file.name || null, uploadId).run();
+  } catch (e) {
+    // Two copies of the same upload arrived at once: keep the first
+    await env.BUCKET.delete(key);
+    if (uploadId && /UNIQUE/i.test(String(e.message))) {
+      const first = await env.DB.prepare('SELECT * FROM receipts WHERE upload_id = ?').bind(uploadId).first();
+      delete first.raw_ai;
+      return json(first, 200);
+    }
+    throw e;
+  }
 
   const settings = await getSettings(env.DB);
   const row = await processReceipt(env, settings, id);

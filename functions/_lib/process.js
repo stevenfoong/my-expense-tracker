@@ -43,5 +43,23 @@ export async function processReceipt(env, settings, id) {
     ),
   ];
   await env.DB.batch(stmts);
+  await flagDuplicate(env, id);
   return env.DB.prepare('SELECT * FROM receipts WHERE id = ?').bind(id).first();
+}
+
+/** Marks a receipt for review when another one has the same date and amount (e.g. the same receipt uploaded twice). */
+async function flagDuplicate(env, id) {
+  const r = await env.DB.prepare('SELECT id, txn_date, total, foreign_amount, status FROM receipts WHERE id = ?').bind(id).first();
+  const amount = r?.total ?? r?.foreign_amount;
+  if (!r || !r.txn_date || amount == null || r.status === 'failed') return;
+  const other = await env.DB.prepare(
+    `SELECT merchant, txn_date FROM receipts
+     WHERE id != ? AND txn_date = ? AND ROUND(COALESCE(total, foreign_amount) * 100) = ROUND(? * 100)
+     ORDER BY created_at LIMIT 1`
+  ).bind(id, r.txn_date, amount).first();
+  if (!other) return;
+  const note = `Possible duplicate of ${other.merchant || 'another receipt'} (same date and amount). Delete this one if it is, or Save to keep both.`;
+  await env.DB.prepare(
+    `UPDATE receipts SET status = 'review', error = ?, updated_at = datetime('now') WHERE id = ?`
+  ).bind(note, id).run();
 }

@@ -64,7 +64,7 @@ function refreshLists() {
 
 function addFiles(files) {
   for (const file of files) {
-    const item = { file, state: 'waiting', li: document.createElement('li') };
+    const item = { file, state: 'waiting', li: document.createElement('li'), uploadId: crypto.randomUUID() };
     queue.push(item);
     queueEl.append(item.li);
     renderQueueItem(item);
@@ -85,9 +85,17 @@ async function runQueue() {
       const file = await compressImage(item.file);
       const fd = new FormData();
       fd.append('file', file, file.name);
+      fd.append('upload_id', item.uploadId); // same id on retry, so the server never saves it twice
       item.state = 'reading';
       renderQueueItem(item);
-      const row = await api('/receipts', { method: 'POST', body: fd });
+      let row;
+      try {
+        row = await api('/receipts', { method: 'POST', body: fd });
+      } catch (e) {
+        // The reply may have been lost after the server saved it (phone locked, network blip): ask first
+        row = await findUpload(item.uploadId);
+        if (!row) throw e;
+      }
       // Done: drop it from the queue; it now appears under Recent uploads.
       item.li.remove();
       queue.splice(queue.indexOf(item), 1);
@@ -103,6 +111,18 @@ async function runQueue() {
     refreshLists();
   }
   running = false;
+}
+
+/** Looks up an upload on the server; waits while it is still being read. Returns the receipt or null. */
+async function findUpload(uploadId) {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    let r;
+    try { r = await api('/receipts?upload_id=' + encodeURIComponent(uploadId)); }
+    catch { return null; } // not found (or offline): treat as failed, Retry is safe
+    if (r.status !== 'processing') return r;
+    await new Promise((res) => setTimeout(res, 5000)); // still being read on the server
+  }
+  return null;
 }
 
 function updateQueueVisibility() {
