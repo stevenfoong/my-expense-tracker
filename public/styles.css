@@ -299,3 +299,10 @@ input.include { width: 20px; height: 20px; flex: none; accent-color: var(--accen
 .search-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .85rem; color: var(--muted);
   background: var(--surface-2); padding: 6px 10px; border-radius: 8px; }
 .search-bar[hidden] { display: none; }
+
+/* Version */
+.version-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.version-status { display: flex; align-items: center; gap: 8px; }
+.changes { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; font-size: .88rem; }
+.update-banner { display: block; width: 100%; border: 0; background: var(--accent); color: var(--accent-ink); font: inherit;
+  font-weight: 600; padding: 10px 16px; cursor: pointer; text-align: center; }

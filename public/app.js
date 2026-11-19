@@ -7,6 +7,7 @@ import spending from './tabs/spending.js';
 import trends from './tabs/trends.js';
 import statements from './tabs/statements.js';
 import settings from './tabs/settings.js';
+import { VERSION, onlineVersion } from './version.js';
 
 const TABS = [
   { id: 'upload',   label: 'Upload',   module: upload },
@@ -54,3 +55,21 @@ async function route() {
 
 window.addEventListener('hashchange', route);
 route();
+
+// Tell the user when a newer version has gone online (checked on start and when the app comes back to the screen)
+let lastCheck = 0;
+async function checkForUpdate() {
+  if (Date.now() - lastCheck < 60_000) return;
+  lastCheck = Date.now();
+  const online = await onlineVersion();
+  if (!online || online === VERSION || document.getElementById('update-banner')) return;
+  const bar = document.createElement('button');
+  bar.id = 'update-banner';
+  bar.type = 'button';
+  bar.className = 'update-banner';
+  bar.textContent = `New version ${online} is available. Tap to update.`;
+  bar.onclick = () => location.reload();
+  document.body.prepend(bar);
+}
+checkForUpdate();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkForUpdate(); });

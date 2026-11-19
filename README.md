@@ -81,3 +81,9 @@ npx wrangler d1 execute expense-tracker --local --file=schema.sql
 npx wrangler pages dev
 ```
 Local runs need `npx wrangler login` for the AI binding (PDF conversion).
+
+## Versioning
+
+`public/version.js` holds the app version and a short change list, shown in **Settings → About**.
+Bump `VERSION` (and add a line to `CHANGES`) with every change you push. The page compares its own
+version with the one online and offers an update when they differ.

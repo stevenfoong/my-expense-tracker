@@ -1,5 +1,6 @@
 import { api, esc, toast, getSettings, setSettingsCache } from '../lib.js';
 import { mountStorage } from '../components/storage.js';
+import { VERSION, RELEASED, CHANGES, onlineVersion } from '../version.js';
 
 let el;
 
@@ -50,8 +51,20 @@ async function show() {
     <div class="card storage">
       <h2>Storage</h2>
       <div id="storage"></div>
+    </div>
+    <div class="card about">
+      <h2>About</h2>
+      <div class="version-row">
+        <div><span class="muted small">Version on this device</span><br><strong>${VERSION}</strong> <span class="muted small">(${RELEASED})</span></div>
+        <div class="version-status" id="version-status"><span class="muted small">Checking for updates…</span></div>
+      </div>
+      <details class="items">
+        <summary>What's new</summary>
+        <ul class="changes">${CHANGES.map(([v, d, t]) => `<li><strong>${v}</strong> <span class="muted small">${d}</span><br>${esc(t)}</li>`).join('')}</ul>
+      </details>
     </div>`;
   mountStorage(el.querySelector('#storage'));
+  checkVersion();
 
   const form = el.querySelector('#settings-form');
   form.onsubmit = async (e) => {
@@ -77,3 +90,14 @@ async function show() {
 }
 
 export default { mount, show };
+
+async function checkVersion() {
+  const box = el.querySelector('#version-status');
+  const online = await onlineVersion();
+  if (!box) return;
+  if (!online) { box.innerHTML = '<span class="muted small">Could not check for updates</span>'; return; }
+  if (online === VERSION) { box.innerHTML = '<span class="pill ok">Up to date</span>'; return; }
+  box.innerHTML = `<span class="small">Online: <strong>${esc(online)}</strong></span>
+    <button type="button" class="btn primary small" data-act="reload">Update now</button>`;
+  box.querySelector('[data-act="reload"]').onclick = () => location.reload();
+}
